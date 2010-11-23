@@ -6,6 +6,7 @@
 	<string>nop</string>
 	<key>command</key>
 	<string>#!/usr/bin/env ruby -wKU
+# encoding: utf-8
 
 SUPPORT = ENV['TM_SUPPORT_PATH']
 
@@ -14,42 +15,36 @@ require SUPPORT + '/lib/exit_codes'
 require SUPPORT + '/lib/osx/plist'
 
 def find_apache
-    return [ ENV['TM_APACHE_DIRECTORY'].to_s, 
-             "/etc/apache2", 
+    return [ ENV['TM_APACHE_DIRECTORY'].to_s,
+             "/etc/apache2",
              "/private/etc/httpd" ].find { |path| File.directory? path }
 end
 
 #Search the path for any filename ending with .conf
-def search_for_conf path
-    confs = []    
-    search_path = find_apache.to_s + path    
-    Dir.open( search_path ).each do |file|    
-        if file.to_s =~ /\.conf$/
-            menu_item = { 'title' =&gt; File.basename(file), 'path' =&gt; search_path + "/" + file.to_s }
-            confs.push(menu_item)
-        end
-    end if File.exists?( search_path )
-    confs.push( { 'title' =&gt; "-" } ) if !confs.empty?
-    return confs
+def find_confs
+    menu = []
+    search_path = find_apache.to_s
+
+    configs = `find -dE "#{search_path}" -maxdepth 7 -regex '.*\\.conf$' -print 2&gt;/dev/null`
+
+    configs.each do |file|
+      menu_item = { 'title' =&gt; File.basename(file), 'path' =&gt; file }
+      menu.push(menu_item)
+    end
+
+    menu
 end
 
-conf_files = search_for_conf( "" ) +
-             search_for_conf( "/users" ) +
-             search_for_conf( "/extra" ) + 
-             search_for_conf( "/other" ) +
-             search_for_conf( "/conf" )
+items = find_confs()
 
-conf_files.pop()
+TextMate.exit_show_tool_tip( "No .conf files found ") if items.empty?
 
-TextMate.exit_show_tool_tip( "No .conf files found ") if conf_files.empty?
-
-plist = { 'menuItems' =&gt; conf_files }.to_plist
+plist = { 'menuItems' =&gt; items }.to_plist
 res = OSX::PropertyList::load(`"$DIALOG" -up #{e_sh plist}`)
 
 TextMate.exit_discard() unless res.has_key? 'selectedMenuItem'
 
-`open -a TextMate #{res['selectedMenuItem']['path']}`
-</string>
+`open -a TextMate #{res['selectedMenuItem']['path']}`</string>
 	<key>input</key>
 	<string>none</string>
 	<key>keyEquivalent</key>
